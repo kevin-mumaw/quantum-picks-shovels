@@ -1,2 +1,6 @@
 data_storage/
 __pycache__/
+
+venv/
+
+intelligence_out/

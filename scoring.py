@@ -9,13 +9,12 @@ from universe import QUANTUM_UNIVERSE
 from settings import DATA_FOLDER, SCORING_WEIGHTS
 
 def calculate_scores():
-    print("Initializing Quantum Screener Scoring Matrix...\n")
+    print("Initializing Refined Quantum Screener Scoring Matrix...\n")
     final_rankings = []
 
     for ticker, meta in QUANTUM_UNIVERSE.items():
         file_path = os.path.join(DATA_FOLDER, f"{ticker}_data.json")
         
-        # Guard clause in case a dataset file is missing
         if not os.path.exists(file_path):
             print(f" [!] Skipping {ticker}: Dataset file not found.")
             continue
@@ -23,24 +22,48 @@ def calculate_scores():
         with open(file_path, "r") as f:
             data = json.load(f)
             
-        # 1. R&D Intensity (R&D / Revenue)
-        rd_intensity = data["research_and_development"] / data["revenue"] if data["revenue"] > 0 else 0
+        # --- EDGE CASE 1: R&D INTENSITY HANDLING ---
+        # Prevent division by zero if revenue is 0. Fall back to proxy calculation.
+        revenue = data.get("revenue", 0)
+        rd_expense = data.get("research_and_development", 0)
         
-        # 2. Cash Runway (Total Cash / Annual Burn)
-        cash_runway = data["total_cash"] / data["annual_burn_rate"] if data["annual_burn_rate"] > 0 else 0
-        
-        # 3. Gross Margin (Gross Profit / Revenue) - proxy for Margin Direction
-        gross_margin = data["gross_profit"] / data["revenue"] if data["revenue"] > 0 else 0
-        
-        # Mock Revenue Growth baseline for structural testing
-        rev_growth = 0.20 
+        if revenue > 0:
+            rd_intensity = rd_expense / revenue
+        else:
+            # Fallback: R&D as a % of absolute cash burn if revenue hasn't scaled yet
+            rd_intensity = rd_expense / abs(data.get("annual_burn_rate", 1))
 
-        # Component Weighted Score Calculation
+        # --- EDGE CASE 2: CASH RUNWAY & PROFITABILITY HANDLING ---
+        # If annual burn rate is 0 or negative, the company is cash-flow positive.
+        burn_rate = data.get("annual_burn_rate", 0)
+        total_cash = data.get("total_cash", 0)
+        
+        if burn_rate <= 0:
+            # Profitable enablers get a maximum safety score (e.g., 10 years proxy)
+            cash_runway = 10.0
+            is_profitable = True
+        else:
+            cash_runway = total_cash / burn_rate
+            is_profitable = False
+
+        # --- EDGE CASE 3: MARGIN DIRECTION & REVENUE GROWTH ---
+        gross_profit = data.get("gross_profit", 0)
+        gross_margin = gross_profit / revenue if revenue > 0 else 0.0
+        rev_growth = data.get("revenue_growth", 0.20)  # Baseline default
+
+        # --- MATHEMATICAL BOUNDING (0.0 to 1.0 Caps) ---
+        # Prevents extreme outliers from breaking the scaling weights
+        capped_rd = min(max(rd_intensity, 0.0), 1.0)
+        capped_runway = min(max(cash_runway / 5.0, 0.0), 1.0)  # Normalized against a 5-year target
+        capped_margin = min(max(gross_margin, 0.0), 1.0)
+        capped_growth = min(max(rev_growth, -1.0), 1.0)
+
+        # Composite Factor Score Calculation
         total_score = (
-            (rd_intensity * SCORING_WEIGHTS["RD_INTENSITY"]) +
-            (cash_runway * SCORING_WEIGHTS["CASH_RUNWAY"]) +
-            (rev_growth * SCORING_WEIGHTS["REVENUE_GROWTH"]) +
-            (gross_margin * SCORING_WEIGHTS["MARGIN_DIRECTION"])
+            (capped_rd * SCORING_WEIGHTS["RD_INTENSITY"]) +
+            (capped_runway * SCORING_WEIGHTS["CASH_RUNWAY"]) +
+            (capped_growth * SCORING_WEIGHTS["REVENUE_GROWTH"]) +
+            (capped_margin * SCORING_WEIGHTS["MARGIN_DIRECTION"])
         )
 
         final_rankings.append({
@@ -49,17 +72,17 @@ def calculate_scores():
             "layer": meta["layer"],
             "final_score": round(total_score, 4),
             "rd_intensity": round(rd_intensity, 2),
-            "runway_years": round(cash_runway, 1)
+            "runway": "Profitable" if is_profitable else f"{round(cash_runway, 1)} Yrs"
         })
 
-    # Sort rankings strictly by final score in descending order
+    # Sort matrix down by ultimate weighted rank
     final_rankings.sort(key=lambda x: x["final_score"], reverse=True)
 
-    # Display final results table
+    # Output Clean Leaderboard Table
     print(f"{'RANK':<5}{'TICKER':<8}{'ECOSYSTEM LAYER':<25}{'SCORE':<10}{'R&D INT':<10}{'CASH RUNWAY':<12}")
     print("-" * 70)
     for index, item in enumerate(final_rankings, 1):
-        print(f"{index:<5}{item['ticker']:<8}{item['layer']:<25}{item['final_score']:<10}{item['rd_intensity']:<10}{str(item['runway_years'])+' Yrs':<12}")
+        print(f"{index:<5}{item['ticker']:<8}{item['layer']:<25}{item['final_score']:<10}{item['rd_intensity']:<10}{item['runway']:<12}")
 
 if __name__ == "__main__":
     calculate_scores()

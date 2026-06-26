@@ -3,8 +3,21 @@ Second Layer Capital - Quantum Screener Configuration
 File: settings.py (Root Directory)
 """
 
-# Hard targets for processing and scoring algorithms
-DATA_FOLDER = "data_storage"
+import os
+from pathlib import Path
+
+# File System Paths
+BASE_DIR = Path(__file__).resolve().parent
+DATA_FOLDER = os.path.join(str(BASE_DIR), "data_storage")
+
+# API Configuration Connection Settings
+# Defaulting to Financial Modeling Prep (FMP) endpoint structures
+API_KEY = os.getenv("FMP_API_KEY", "demo")  # Falls back to "demo" mode if no key is found
+BASE_URL = "https://financialmodelingprep.com"
+
+# Operational Rate Limiting Safeguards
+TIMEOUT_SECONDS = 15
+RATE_LIMIT_DELAY = 1.0  # Safe 1-second delay execution between HTTP requests
 
 # Strategic operational metrics weighting (Must equal 1.0)
 SCORING_WEIGHTS = {
@@ -15,6 +28,5 @@ SCORING_WEIGHTS = {
 }
 
 if __name__ == "__main__":
-    print(f"[✓] Settings file loaded successfully.")
-    print(f"Total strategic metric allocation: {sum(SCORING_WEIGHTS.values()) * 100}%")
-
+    print(f"[✓] Settings loaded.")
+    print(f"Target local cache path: {DATA_FOLDER}")
