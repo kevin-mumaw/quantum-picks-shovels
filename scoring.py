@@ -83,5 +83,5 @@ def calculate_scores(target_layer: str = None):
         print(f"{index:<5}{item['ticker']:<8}{item['layer']:<25}{item['final_score']:<10}{item['rd_intensity']:<10}{item['runway']:<12}")
 
 if __name__ == "__main__":
-    # Change parameter to "HARDWARE_MODALITY", "CONTROL_SYSTEMS_RF", or "CRYOGENICS_ENVIRONMENT" to slice views
-    calculate_scores(target_layer="HARDWARE_MODALITY")
+    calculate_scores(target_layer=None)
+
